@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forest Hunter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0f0a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+
+<script>
+// ============================================================
+//  SECTION 1: SOUND MANAGER
+//  Uses the Web Audio API to make simple synthesized sounds.
+//  No audio files needed — we build sounds from scratch!
+// ============================================================
+class SoundManager {
+    constructor() {
+        this.ctx = null; // AudioContext created on first user click
+    }
+
+    init() {
+        if (!this.ctx) {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    }
+
+    // Helper: play a tone with attack/decay envelope
+    _tone(freq, duration, type = 'square', volume = 0.15) {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(volume, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+        osc.connect(gain).connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration);
+    }
+
+    shoot()       { this._tone(800, 0.06, 'square', 0.08); }
+    superShoot()  { this._tone(1200, 0.1, 'sawtooth', 0.1); this._tone(900, 0.15, 'sine', 0.06); }
+    hit()         { this._tone(200, 0.08, 'triangle', 0.12); }
+    kill()        { this._tone(500, 0.15, 'square', 0.1); this._tone(700, 0.2, 'sine', 0.08); }
+    playerHurt()  { this._tone(100, 0.25, 'sawtooth', 0.15); }
+    pickup()      { this._tone(600, 0.08, 'sine', 0.1); setTimeout(() => this._tone(900, 0.08, 'sine', 0.1), 80); setTimeout(() => this._tone(1200, 0.15, 'sine', 0.1), 160); }
+    waveStart()   { this._tone(300, 0.3, 'sine', 0.08); this._tone(450, 0.3, 'sine', 0.06); }
+}
+
+const sfx = new SoundManager();
+
+
+// ============================================================
+//  SECTION 2: BOOT SCENE
+//  Generates all the game's textures using code (no image files).
+//  Each texture is drawn onto a small canvas, then registered
+//  so Phaser can use it as a sprite.
+// ============================================================
+class BootScene extends Phaser.Scene {
+    constructor() { super('Boot'); }
+
+    create() {
+        const g = this.make.graphics({ add: false });
+
+        // Player body — brown circle with an eye
+        g.clear();
+        g.fillStyle(0x8B4513); g.fillCircle(16, 16, 14);
+        g.fillStyle(0x5c2d0e); g.fillCircle(16, 16, 14); // darker outline
+        g.fillStyle(0x8B4513); g.fillCircle(16, 16, 12);
+        g.fillStyle(0xffffff); g.fillCircle(20, 13, 3);
+        g.fillStyle(0x000000); g.fillCircle(21, 13, 1.5);
+        g.generateTexture('player', 32, 32);
+
+        // Deer — brown oval with antler nubs
+        g.clear();
+        g.fillStyle(0xA0522D); g.fillEllipse(16, 18, 26, 22);
+        g.fillStyle(0xc4773b); g.fillEllipse(16, 18, 22, 18);
+        g.fillStyle(0x5c3a1a); g.fillRect(10, 2, 2, 10); g.fillRect(20, 2, 2, 10); // antlers
+        g.fillStyle(0x000000); g.fillCircle(20, 15, 1.5); // eye
+        g.generateTexture('deer', 32, 32);
+
+        // Boar — dark grey, tusks
+        g.clear();
+        g.fillStyle(0x2a2a2a); g.fillEllipse(18, 18, 32, 28);
+        g.fillStyle(0x3d3d3d); g.fillEllipse(18, 18, 28, 24);
+        g.fillStyle(0xcccccc); g.fillRect(28, 20, 6, 2); g.fillRect(28, 14, 6, 2); // tusks
+        g.fillStyle(0xff2222); g.fillCircle(10, 16, 2); // angry eye
+        g.generateTexture('boar', 36, 36);
+
+        // Pig — same as boar but with pink snout dot
+        g.clear();
+        g.fillStyle(0x2a2a2a); g.fillEllipse(18, 18, 32, 28);
+        g.fillStyle(0x3d3d3d); g.fillEllipse(18, 18, 28, 24);
+        g.fillStyle(0xcccccc); g.fillRect(28, 20, 6, 2); g.fillRect(28, 14, 6, 2);
+        g.fillStyle(0x000000); g.fillCircle(10, 16, 2);
+        g.fillStyle(0xffc0cb); g.fillCircle(30, 17, 2.5); // the tiny pink tell!
+        g.generateTexture('pig', 36, 36);
+
+        // Mega Deer — large with golden outline
+        g.clear();
+        g.fillStyle(0xFFD700); g.fillEllipse(24, 24, 44, 38);
+        g.fillStyle(0x4b2e00); g.fillEllipse(24, 24, 40, 34);
+        g.fillStyle(0x6b4400); g.fillEllipse(24, 24, 36, 30);
+        g.fillStyle(0xFFD700); g.fillRect(14, 2, 3, 14); g.fillRect(18, 0, 2, 10);
+        g.fillRect(28, 2, 3, 14); g.fillRect(24, 0, 2, 10); // big antlers
+        g.fillStyle(0xff6600); g.fillCircle(30, 20, 2.5);
+        g.generateTexture('mega', 48, 48);
+
+        // Bullet (normal)
+        g.clear();
+        g.fillStyle(0xFFFF00); g.fillCircle(4, 4, 4);
+        g.generateTexture('bullet', 8, 8);
+
+        // Super bullet (seeking)
+        g.clear();
+        g.fillStyle(0x00fbff); g.fillCircle(6, 6, 6);
+        g.fillStyle(0xffffff); g.fillCircle(6, 6, 2);
+        g.generateTexture('super_bullet', 12, 12);
+
+        // Particle (white dot, used for explosions)
+        g.clear();
+        g.fillStyle(0xffffff); g.fillCircle(3, 3, 3);
+        g.generateTexture('particle', 6, 6);
+
+        // Smoke particle
+        g.clear();
+        g.fillStyle(0xaaaaaa); g.fillCircle(4, 4, 4);
+        g.generateTexture('smoke', 8, 8);
+
+        // Gun pickup glow
+        g.clear();
+        g.fillStyle(0x00fbff); g.fillRoundedRect(2, 8, 28, 12, 3);
+        g.fillStyle(0xffffff); g.fillRoundedRect(6, 10, 20, 8, 2);
+        g.generateTexture('gun_pickup', 32, 28);
+
+        // Tree top
+        g.clear();
+        g.fillStyle(0x1a5c1a); g.fillCircle(24, 24, 24);
+        g.fillStyle(0x237023); g.fillCircle(20, 20, 18);
+        g.generateTexture('tree_top', 48, 48);
+
+        // Tree trunk
+        g.clear();
+        g.fillStyle(0x4a3520); g.fillRect(0, 0, 10, 20);
+        g.generateTexture('trunk', 10, 20);
+
+        // Rock
+        g.clear();
+        g.fillStyle(0x666666); g.fillEllipse(12, 10, 24, 16);
+        g.fillStyle(0x777777); g.fillEllipse(10, 9, 18, 12);
+        g.generateTexture('rock', 24, 20);
+
+        // Health heart
+        g.clear();
+        g.fillStyle(0xff4444);
+        g.fillCircle(6, 5, 5); g.fillCircle(14, 5, 5);
+        g.fillTriangle(1, 7, 10, 18, 19, 7);
+        g.generateTexture('heart', 20, 20);
+
+        g.destroy();
+        this.scene.start('Game');
+    }
+}
+
+
+// ============================================================
+//  SECTION 3: GAME SCENE — The main gameplay
+// ============================================================
+class GameScene extends Phaser.Scene {
+    constructor() { super('Game'); }
+
+    create() {
+        sfx.init();
+
+        // --- World setup: bigger than the screen! ---
+        const WORLD_W = 2800, WORLD_H = 2000;
+        this.physics.world.setBounds(0, 0, WORLD_W, WORLD_H);
+        this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H);
+
+        // Grass background — two-tone for depth
+        this.add.rectangle(WORLD_W/2, WORLD_H/2, WORLD_W, WORLD_H, 0x2a5a2a);
+        for (let i = 0; i < 80; i++) {
+            const gx = Phaser.Math.Between(0, WORLD_W);
+            const gy = Phaser.Math.Between(0, WORLD_H);
+            this.add.circle(gx, gy, Phaser.Math.Between(20, 60), 0x245224, 0.3);
+        }
+
+        // Scatter trees (decorative, behind everything gameplay-related)
+        this.treeGroup = this.add.group();
+        for (let i = 0; i < 50; i++) {
+            const tx = Phaser.Math.Between(60, WORLD_W - 60);
+            const ty = Phaser.Math.Between(60, WORLD_H - 60);
+            this.add.image(tx, ty + 16, 'trunk').setDepth(1);
+            this.add.image(tx, ty, 'tree_top').setDepth(2).setAlpha(0.7);
+        }
+        // Scatter rocks
+        for (let i = 0; i < 30; i++) {
+            const rx = Phaser.Math.Between(40, WORLD_W - 40);
+            const ry = Phaser.Math.Between(40, WORLD_H - 40);
+            this.add.image(rx, ry, 'rock').setDepth(1).setAlpha(0.6);
+        }
+
+        // --- Player ---
+        this.player = this.physics.add.sprite(WORLD_W / 2, WORLD_H / 2, 'player');
+        this.player.setCollideWorldBounds(true);
+        this.player.setDepth(5);
+        this.player.setDamping(true);
+        this.player.setDrag(0.85);
+        this.player.body.setCircle(12, 4, 4);
+        this.player.hp = 5;
+        this.player.maxHp = 5;
+        this.player.facing = 'right';
+        this.player.hasSuperGun = false;
+        this.player.superShotCount = 0;
+        this.player.lastVolleyTime = 0;
+        this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+
+        // --- Groups for game objects ---
+        this.enemies = this.physics.add.group();
+        this.bullets = this.physics.add.group();
+        this.pickups = this.physics.add.group();
+
+        // --- Game state ---
+        this.xp = 0;
+        this.wave = 1;
+        this.timeLeft = 150; // 2:30
+        this.gameActive = true;
+        this.lastShootTime = 0;
+        this.shootCooldown = 200; // ms between normal shots
+
+        // --- Input ---
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.wasd = this.input.keyboard.addKeys('W,A,S,D');
+        this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+        // --- HUD (fixed to camera) ---
+        this.createHUD();
+
+        // --- Timers ---
+        // Countdown timer
+        this.time.addEvent({
+            delay: 1000, loop: true,
+            callback: () => {
+                if (!this.gameActive) return;
+                this.timeLeft--;
+                this.updateTimerDisplay();
+                if (this.timeLeft <= 0) this.endGame("Time's Up!");
+            }
+        });
+
+        // Wave escalation every 30 seconds
+        this.time.addEvent({
+            delay: 30000, loop: true,
+            callback: () => {
+                if (!this.gameActive) return;
+                this.wave++;
+                this.showWaveBanner(`Wave ${this.wave}`);
+                sfx.waveStart();
+            }
+        });
+
+        // Spawn loop — spawns enemies based on current wave
+        this.time.addEvent({
+            delay: 2500, loop: true,
+            callback: () => this.spawnWaveEnemies()
+        });
+
+        // Initial spawns
+        for (let i = 0; i < 4; i++) this.spawnEnemy('deer');
+
+        // Mega deer at 40 seconds
+        this.time.delayedCall(40000, () => {
+            if (this.gameActive) {
+                this.spawnEnemy('mega');
+                this.showWaveBanner('⚠ MEGA DEER ⚠');
+            }
+        });
+
+        // Collisions
+        this.physics.add.overlap(this.bullets, this.enemies, this.bulletHitEnemy, null, this);
+        this.physics.add.overlap(this.player, this.enemies, this.meleeEnemy, null, this);
+        this.physics.add.overlap(this.player, this.pickups, this.collectPickup, null, this);
+
+        // Show wave 1 banner
+        this.showWaveBanner('Wave 1 — Hunt!');
+        sfx.waveStart();
+    }
+
+
+    // --------------------------------------------------------
+    //  HUD: Health bar, XP, Timer, Volley status — fixed to camera
+    // --------------------------------------------------------
+    createHUD() {
+        // Semi-transparent background bar
+        this.hudBg = this.add.rectangle(0, 0, 400, 50, 0x000000, 0.7)
+            .setScrollFactor(0).setOrigin(0, 0).setDepth(100);
+
+        // Hearts for HP
+        this.hearts = [];
+        for (let i = 0; i < 5; i++) {
+            const h = this.add.image(20 + i * 24, 25, 'heart')
+                .setScrollFactor(0).setDepth(101).setScale(1);
+            this.hearts.push(h);
+        }
+
+        // XP display
+        this.xpText = this.add.text(145, 12, 'XP: 0', {
+            fontFamily: 'Courier New', fontSize: '18px', color: '#ffdd44',
+            stroke: '#000', strokeThickness: 3
+        }).setScrollFactor(0).setDepth(101);
+
+        // Timer
+        this.timerText = this.add.text(260, 12, 'Time: 2:30', {
+            fontFamily: 'Courier New', fontSize: '18px', color: '#ffffff',
+            stroke: '#000', strokeThickness: 3
+        }).setScrollFactor(0).setDepth(101);
+
+        // Volley status
+        this.volleyText = this.add.text(400, 12, '', {
+            fontFamily: 'Courier New', fontSize: '16px', color: '#666666',
+            stroke: '#000', strokeThickness: 2
+        }).setScrollFactor(0).setDepth(101);
+
+        // Wave indicator (top-right)
+        this.waveText = this.add.text(this.cameras.main.width - 10, 12, 'Wave 1', {
+            fontFamily: 'Courier New', fontSize: '16px', color: '#8fbc3f',
+            stroke: '#000', strokeThickness: 3
+        }).setScrollFactor(0).setDepth(101).setOrigin(1, 0);
+    }
+
+
+    // --------------------------------------------------------
+    //  WAVE BANNER: Big text announcement that fades out
+    // --------------------------------------------------------
+    showWaveBanner(text) {
+        const cam = this.cameras.main;
+        const banner = this.add.text(cam.width / 2, cam.height / 2 - 60, text, {
+            fontFamily: 'Courier New', fontSize: '48px', color: '#FFD700',
+            stroke: '#000000', strokeThickness: 6
+        }).setScrollFactor(0).setOrigin(0.5).setDepth(200).setAlpha(0);
+
+        this.tweens.add({
+            targets: banner, alpha: 1, y: cam.height / 2 - 80,
+            duration: 400, ease: 'Back.easeOut',
+            onComplete: () => {
+                this.tweens.add({
+                    targets: banner, alpha: 0, y: cam.height / 2 - 120,
+                    delay: 1200, duration: 600,
+                    onComplete: () => banner.destroy()
+                });
+            }
+        });
+    }
+
+
+    // --------------------------------------------------------
+    //  SPAWNING: What enemies appear depends on the wave
+    // --------------------------------------------------------
+    spawnWaveEnemies() {
+        if (!this.gameActive) return;
+
+        // Always spawn deer
+        const deerCount = this.wave >= 3 ? 3 : 2;
+        for (let i = 0; i < deerCount; i++) this.spawnEnemy('deer');
+
+        // Boars from wave 2+
+        if (this.wave >= 2 && Math.random() < 0.5) this.spawnEnemy('boar');
+
+        // Pigs from wave 2+
+        if (this.wave >= 2 && Math.random() < 0.4) this.spawnEnemy('pig');
+
+        // Extra mega deer from wave 4+
+        if (this.wave >= 4 && Math.random() < 0.3) this.spawnEnemy('mega');
+    }
+
+    spawnEnemy(type) {
+        if (!this.gameActive) return;
+        const bounds = this.physics.world.bounds;
+        const pad = 100;
+        const x = Phaser.Math.Between(pad, bounds.width - pad);
+        const y = Phaser.Math.Between(pad, bounds.height - pad);
+
+        // Don't spawn right on top of the player
+        if (Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y) < 200) return this.spawnEnemy(type);
+
+        const textureKey = type === 'mega' ? 'mega' : type;
+        const enemy = this.enemies.create(x, y, textureKey);
+        enemy.setDepth(4);
+        enemy.enemyType = type;
+        enemy.lastMeleeTime = 0;
+
+        // Stats by type
+        const stats = {
+            deer:  { hp: 2, xpValue: 15, speed: 100 },
+            pig:   { hp: 4, xpValue: 35, speed: 110 },
+            boar:  { hp: 5, xpValue: Phaser.Math.Between(45, 60), speed: 80 },
+            mega:  { hp: 10, xpValue: 85, speed: 130 },
+        };
+        const s = stats[type];
+        enemy.hp = s.hp;
+        enemy.maxHp = s.hp;
+        enemy.xpValue = s.xpValue;
+        enemy.moveSpeed = s.speed;
+        enemy.setCollideWorldBounds(true);
+        enemy.setBounce(1);
+        enemy.body.setCircle(enemy.width / 2 - 2, 2, 2);
+
+        // Initial random velocity
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        enemy.setVelocity(Math.cos(angle) * s.speed, Math.sin(angle) * s.speed);
+
+        // Random direction changes for non-boars
+        if (type !== 'boar') {
+            enemy.changeTimer = this.time.addEvent({
+                delay: Phaser.Math.Between(1500, 3500), loop: true,
+                callback: () => {
+                    if (!enemy.active) return;
+                    const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+                    enemy.setVelocity(Math.cos(a) * enemy.moveSpeed, Math.sin(a) * enemy.moveSpeed);
+                }
+            });
+        }
+
+        // Draw a health bar above the enemy
+        enemy.hpBar = this.add.graphics().setDepth(6);
+        this.updateEnemyHpBar(enemy);
+    }
+
+
+    // --------------------------------------------------------
+    //  UPDATE: Runs every frame (~60 times per second)
+    // --------------------------------------------------------
+    update(time, delta) {
+        if (!this.gameActive) return;
+
+        // --- Player movement (with normalized diagonal!) ---
+        const speed = this.player.hasSuperGun ? 350 : 200;
+        let vx = 0, vy = 0;
+
+        if (this.cursors.left.isDown  || this.wasd.A.isDown) { vx = -1; this.player.facing = 'left'; }
+        if (this.cursors.right.isDown || this.wasd.D.isDown) { vx =  1; this.player.facing = 'right'; }
+        if (this.cursors.up.isDown    || this.wasd.W.isDown) { vy = -1; this.player.facing = 'up'; }
+        if (this.cursors.down.isDown  || this.wasd.S.isDown) { vy =  1; this.player.facing = 'down'; }
+
+        // Normalize so diagonal isn't faster
+        const len = Math.sqrt(vx * vx + vy * vy) || 1;
+        this.player.setVelocity((vx / len) * speed, (vy / len) * speed);
+
+        // Tint player when super gun equipped
+        this.player.setTint(this.player.hasSuperGun ? 0x88ffff : 0xffffff);
+
+        // --- Shooting ---
+        if (this.spaceKey.isDown) {
+            this.tryShoot(time);
+        }
+
+        // --- Boar AI: chase the player! ---
+        this.enemies.getChildren().forEach(e => {
+            if (!e.active) return;
+            if (e.enemyType === 'boar') {
+                const angle = Phaser.Math.Angle.Between(e.x, e.y, this.player.x, this.player.y);
+                const chaseSpeed = e.moveSpeed + (this.wave * 10); // gets faster each wave!
+                e.setVelocity(Math.cos(angle) * chaseSpeed, Math.sin(angle) * chaseSpeed);
+            }
+            // Deer flee when player is close
+            if (e.enemyType === 'deer') {
+                const dist = Phaser.Math.Distance.Between(e.x, e.y, this.player.x, this.player.y);
+                if (dist < 150) {
+                    const away = Phaser.Math.Angle.Between(this.player.x, this.player.y, e.x, e.y);
+                    e.setVelocity(Math.cos(away) * e.moveSpeed * 1.5, Math.sin(away) * e.moveSpeed * 1.5);
+                }
+            }
+            // Update HP bar position
+            this.updateEnemyHpBar(e);
+        });
+
+        // --- Volley status ---
+        if (this.player.hasSuperGun) {
+            const elapsed = time - this.player.lastVolleyTime;
+            if (elapsed >= 3000) {
+                this.volleyText.setText('⚡ VOLLEY READY');
+                this.volleyText.setColor('#00fbff');
+            } else {
+                const remaining = Math.ceil((3000 - elapsed) / 1000);
+                this.volleyText.setText(`Volley: ${remaining}s`);
+                this.volleyText.setColor('#666666');
+            }
+        } else {
+            this.volleyText.setText('');
+        }
+
+        // --- Clean up off-screen bullets ---
+        this.bullets.getChildren().forEach(b => {
+            if (!b.active) return;
+            const bounds = this.physics.world.bounds;
+            if (b.x < -50 || b.x > bounds.width + 50 || b.y < -50 || b.y > bounds.height + 50) {
+                b.destroy();
+            }
+
+            // Seeking behavior for super bullets
+            if (b.seeking && this.enemies.getChildren().length > 0) {
+                let closest = null, minDist = Infinity;
+                this.enemies.getChildren().forEach(e => {
+                    if (!e.active) return;
+                    const d = Phaser.Math.Distance.Between(b.x, b.y, e.x, e.y);
+                    if (d < minDist) { minDist = d; closest = e; }
+                });
+                if (closest) {
+                    const angle = Phaser.Math.Angle.Between(b.x, b.y, closest.x, closest.y);
+                    b.setVelocity(Math.cos(angle) * 500, Math.sin(angle) * 500);
+                }
+            }
+        });
+
+        // --- Ensure minimum deer ---
+        const deerAlive = this.enemies.getChildren().filter(e => e.active && e.enemyType === 'deer').length;
+        if (deerAlive < 2) {
+            for (let i = 0; i < 3; i++) this.spawnEnemy('deer');
+        }
+    }
+
+
+    // --------------------------------------------------------
+    //  SHOOTING: Normal shots and Super Gun volleys
+    // --------------------------------------------------------
+    tryShoot(time) {
+        if (time - this.lastShootTime < this.shootCooldown) return;
+        this.lastShootTime = time;
+
+        const dirs = { right: 0, left: Math.PI, up: -Math.PI/2, down: Math.PI/2 };
+        const baseAngle = dirs[this.player.facing] || 0;
+
+        const isVolley = this.player.hasSuperGun && (time - this.player.lastVolleyTime >= 3000);
+        const count = isVolley ? 10 : 1;
+        const spread = isVolley ? Math.PI / 4 : 0;
+
+        if (isVolley) {
+            this.player.lastVolleyTime = time;
+            sfx.superShoot();
+        } else {
+            sfx.shoot();
+        }
+
+        for (let i = 0; i < count; i++) {
+            this.player.superShotCount++;
+            let offset = 0;
+            if (count > 1) offset = (i / (count - 1)) * spread - spread / 2;
+            const angle = baseAngle + offset;
+            const bulletSpeed = 500;
+            const isSeeking = this.player.hasSuperGun && (this.player.superShotCount % 5 === 0);
+
+            const b = this.bullets.create(this.player.x, this.player.y, isSeeking ? 'super_bullet' : 'bullet');
+            b.setDepth(5);
+            b.setVelocity(Math.cos(angle) * bulletSpeed, Math.sin(angle) * bulletSpeed);
+            b.seeking = isSeeking;
+            b.body.setCircle(isSeeking ? 6 : 4);
+
+            if (isSeeking) b.setTint(0x00fbff);
+        }
+
+        // Muzzle smoke
+        for (let i = 0; i < 6; i++) {
+            const s = this.add.image(this.player.x, this.player.y, 'smoke')
+                .setDepth(5).setAlpha(0.6).setScale(Phaser.Math.FloatBetween(0.5, 1.2));
+            this.tweens.add({
+                targets: s,
+                x: s.x + Phaser.Math.Between(-30, 30),
+                y: s.y + Phaser.Math.Between(-30, 30),
+                alpha: 0, scale: 0.1, duration: 300,
+                onComplete: () => s.destroy()
+            });
+        }
+    }
+
+
+    // --------------------------------------------------------
+    //  COLLISIONS
+    // --------------------------------------------------------
+    bulletHitEnemy(bullet, enemy) {
+        if (!bullet.active || !enemy.active) return;
+        bullet.destroy();
+        enemy.hp--;
+        sfx.hit();
+        this.updateEnemyHpBar(enemy);
+
+        // Flash the enemy white on hit
+        enemy.setTint(0xffffff);
+        this.time.delayedCall(80, () => { if (enemy.active) enemy.clearTint(); });
+
+        // Floating damage number
+        this.showDamageNumber(enemy.x, enemy.y - 20, '1');
+
+        if (enemy.hp <= 0) this.killEnemy(enemy);
+    }
+
+    meleeEnemy(player, enemy) {
+        if (!enemy.active || !this.gameActive) return;
+        const now = this.time.now;
+        if (now - enemy.lastMeleeTime < 1000) return; // 1 damage per second
+        enemy.lastMeleeTime = now;
+
+        enemy.hp--;
+        this.updateEnemyHpBar(enemy);
+        this.showDamageNumber(enemy.x, enemy.y - 20, '1');
+
+        // Boars hurt back!
+        if (enemy.enemyType === 'boar') {
+            this.player.hp--;
+            this.xp = Math.max(0, this.xp - 10);
+            this.updateHpDisplay();
+            this.xpText.setText(`XP: ${this.xp}`);
+            sfx.playerHurt();
+            this.cameras.main.shake(200, 0.01);
+            this.showDamageNumber(this.player.x, this.player.y - 30, '-1 HP', '#ff4444');
+            if (this.player.hp <= 0) {
+                this.endGame('Defeated by a Boar!');
+                return;
+            }
+        }
+
+        if (enemy.hp <= 0) this.killEnemy(enemy);
+    }
+
+    collectPickup(player, pickup) {
+        pickup.destroy();
+        this.player.hasSuperGun = true;
+        this.player.lastVolleyTime = 0; // ready immediately
+        sfx.pickup();
+        this.showWaveBanner('⚡ SUPER GUN ⚡');
+    }
+
+
+    // --------------------------------------------------------
+    //  ENEMY DEATH: XP, particles, drops
+    // --------------------------------------------------------
+    killEnemy(enemy) {
+        if (!enemy.active) return;
+        this.xp += enemy.xpValue;
+        this.xpText.setText(`XP: ${this.xp}`);
+        sfx.kill();
+
+        // Kill particles — burst of colored dots
+        const color = enemy.enemyType === 'mega' ? 0xFFD700 : 
+                      enemy.enemyType === 'boar' ? 0x666666 : 0xA0522D;
+        for (let i = 0; i < 15; i++) {
+            const p = this.add.circle(enemy.x, enemy.y, Phaser.Math.Between(2, 5), color)
+                .setDepth(10).setAlpha(0.9);
+            this.tweens.add({
+                targets: p,
+                x: p.x + Phaser.Math.Between(-60, 60),
+                y: p.y + Phaser.Math.Between(-60, 60),
+                alpha: 0, scale: 0, duration: Phaser.Math.Between(300, 600),
+                onComplete: () => p.destroy()
+            });
+        }
+
+        // Floating XP number
+        this.showDamageNumber(enemy.x, enemy.y - 30, `+${enemy.xpValue} XP`, '#44ff44');
+
+        // Mega deer drops super gun
+        if (enemy.enemyType === 'mega') {
+            const pickup = this.pickups.create(enemy.x, enemy.y, 'gun_pickup');
+            pickup.setDepth(5);
+            // Pulsing glow effect
+            this.tweens.add({
+                targets: pickup, scale: 1.3, alpha: 0.7,
+                yoyo: true, repeat: -1, duration: 500
+            });
+        }
+
+        // Clean up HP bar
+        if (enemy.hpBar) enemy.hpBar.destroy();
+        if (enemy.changeTimer) enemy.changeTimer.destroy();
+        enemy.destroy();
+    }
+
+
+    // --------------------------------------------------------
+    //  VISUAL HELPERS
+    // --------------------------------------------------------
+    showDamageNumber(x, y, text, color = '#ffffff') {
+        const t = this.add.text(x, y, text, {
+            fontFamily: 'Courier New', fontSize: '20px', color: color,
+            stroke: '#000000', strokeThickness: 4, fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(50);
+        this.tweens.add({
+            targets: t, y: y - 40, alpha: 0,
+            duration: 800, ease: 'Power2',
+            onComplete: () => t.destroy()
+        });
+    }
+
+    updateEnemyHpBar(enemy) {
+        if (!enemy.active || !enemy.hpBar) return;
+        const g = enemy.hpBar;
+        g.clear();
+        const barW = 30, barH = 4;
+        const bx = enemy.x - barW / 2;
+        const by = enemy.y - enemy.height / 2 - 10;
+        // Background
+        g.fillStyle(0x333333, 0.8);
+        g.fillRect(bx, by, barW, barH);
+        // Health fill
+        const pct = enemy.hp / enemy.maxHp;
+        const fillColor = pct > 0.5 ? 0x44ff44 : pct > 0.25 ? 0xffaa00 : 0xff4444;
+        g.fillStyle(fillColor, 0.9);
+        g.fillRect(bx, by, barW * pct, barH);
+    }
+
+    updateHpDisplay() {
+        for (let i = 0; i < this.hearts.length; i++) {
+            this.hearts[i].setAlpha(i < this.player.hp ? 1 : 0.2);
+        }
+    }
+
+    updateTimerDisplay() {
+        const m = Math.floor(this.timeLeft / 60);
+        const s = this.timeLeft % 60;
+        this.timerText.setText(`Time: ${m}:${s < 10 ? '0' : ''}${s}`);
+        if (this.timeLeft <= 30) this.timerText.setColor('#ff4444');
+    }
+
+
+    // --------------------------------------------------------
+    //  GAME OVER
+    // --------------------------------------------------------
+    endGame(reason) {
+        this.gameActive = false;
+        this.physics.pause();
+
+        // Darken screen
+        const cam = this.cameras.main;
+        const overlay = this.add.rectangle(cam.scrollX + cam.width/2, cam.scrollY + cam.height/2,
+            cam.width, cam.height, 0x000000, 0).setDepth(150).setScrollFactor(0);
+        this.tweens.add({ targets: overlay, fillAlpha: 0.7, duration: 800 });
+
+        // Game over text
+        const title = this.add.text(cam.width/2, cam.height/2 - 60, reason, {
+            fontFamily: 'Courier New', fontSize: '44px', color: '#FFD700',
+            stroke: '#000', strokeThickness: 6
+        }).setScrollFactor(0).setOrigin(0.5).setDepth(200).setAlpha(0);
+
+        const score = this.add.text(cam.width/2, cam.height/2 + 10, `Final Score: ${this.xp} XP`, {
+            fontFamily: 'Courier New', fontSize: '28px', color: '#ffffff',
+            stroke: '#000', strokeThickness: 4
+        }).setScrollFactor(0).setOrigin(0.5).setDepth(200).setAlpha(0);
+
+        const hint = this.add.text(cam.width/2, cam.height/2 + 70, 'Click or press Space to hunt again', {
+            fontFamily: 'Courier New', fontSize: '18px', color: '#8fbc3f',
+            stroke: '#000', strokeThickness: 3
+        }).setScrollFactor(0).setOrigin(0.5).setDepth(200).setAlpha(0);
+
+        this.tweens.add({ targets: title, alpha: 1, y: cam.height/2 - 70, duration: 600, delay: 400 });
+        this.tweens.add({ targets: score, alpha: 1, duration: 600, delay: 800 });
+        this.tweens.add({ targets: hint, alpha: 1, duration: 600, delay: 1200 });
+
+        // Restart on click or space
+        this.time.delayedCall(1500, () => {
+            this.input.keyboard.once('keydown-SPACE', () => this.scene.restart());
+            this.input.once('pointerdown', () => this.scene.restart());
+        });
+    }
+}
+
+
+// ============================================================
+//  SECTION 4: PHASER CONFIG — Ties it all together
+// ============================================================
+const config = {
+    type: Phaser.AUTO,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    backgroundColor: '#0a1a0a',
+    parent: document.body,
+    physics: {
+        default: 'arcade',
+        arcade: { debug: false }
+    },
+    scene: [BootScene, GameScene],
+    scale: {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    }
+};
+
+const game = new Phaser.Game(config);
+
+// Handle browser resize
+window.addEventListener('resize', () => {
+    game.scale.resize(window.innerWidth, window.innerHeight);
+});
+</script>
+
+</body>
+</html>
