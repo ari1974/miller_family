@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LD Nationals Tournament Dashboard — Violent Revolution</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f7fa;
+    --surface: #ffffff;
+    --border: #d8dee9;
+    --primary: #1f3864;
+    --accent: #2f5496;
+    --muted: #666;
+    --good: #2e7d32;
+    --bad: #c00000;
+    --warn: #d97706;
+    --highlight: #fff8e1;
+    --aff-bg: #e8f1fb;
+    --neg-bg: #fdeeee;
+  }
+  html, body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: #1a1a1a;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  body { min-height: 100vh; }
+
+  /* ====================== Top bar ====================== */
+  #topbar {
+    position: sticky;
+    top: 0;
+    background: var(--primary);
+    color: white;
+    padding: 10px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    z-index: 100;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.12);
+  }
+  #topbar h1 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-right: 20px;
+    white-space: nowrap;
+  }
+  .pin {
+    background: rgba(255,255,255,0.14);
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .pin strong { font-weight: 700; color: #ffd966; }
+
+  /* ====================== Layout ====================== */
+  #main {
+    display: flex;
+    min-height: calc(100vh - 58px);
+  }
+  #sidebar {
+    width: 240px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 16px 0;
+    position: sticky;
+    top: 58px;
+    align-self: flex-start;
+    max-height: calc(100vh - 58px);
+    overflow-y: auto;
+  }
+  .nav-group-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    padding: 10px 16px 4px;
+    font-weight: 700;
+  }
+  .nav-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 9px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    color: #333;
+    border-left: 3px solid transparent;
+    font-family: inherit;
+  }
+  .nav-btn:hover { background: #f0f4f9; }
+  .nav-btn.active {
+    background: #eaf1fa;
+    border-left-color: var(--accent);
+    color: var(--primary);
+    font-weight: 600;
+  }
+  .nav-btn.aff { border-left-color: #5b8dd6; }
+  .nav-btn.neg { border-left-color: #d66a6a; }
+
+  #content {
+    flex: 1;
+    padding: 24px 32px;
+    max-width: 1100px;
+  }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .panel h2 {
+    color: var(--primary);
+    font-size: 24px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+  }
+  .panel h3 {
+    color: var(--accent);
+    font-size: 18px;
+    margin: 20px 0 8px;
+  }
+  .panel p { margin-bottom: 10px; }
+  .panel ul { margin: 6px 0 14px 24px; }
+  .panel li { margin-bottom: 4px; }
+
+  /* ====================== Timer panel ====================== */
+  .timers {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .timer-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+  }
+  .timer-label { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+  .timer-display {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 44px;
+    font-weight: 600;
+    color: var(--primary);
+    margin: 8px 0 12px;
+    letter-spacing: 1px;
+  }
+  .timer-display.warn { color: var(--warn); }
+  .timer-display.crit { color: var(--bad); }
+  .timer-controls {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .timer-controls button {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .timer-controls button:hover { background: #f0f4f9; }
+  .timer-controls .primary {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+  }
+  .timer-controls .primary:hover { background: #15274a; }
+  .preset-row {
+    margin-top: 10px;
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .preset-row button {
+    font-size: 11px;
+    padding: 5px 8px;
+  }
+
+  /* ====================== Expandable cards ====================== */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+  .card-head {
+    padding: 10px 14px;
+    font-weight: 600;
+    background: #f7f9fc;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+    font-size: 14px;
+  }
+  .card-head:hover { background: #eef3f9; }
+  .card.aff .card-head { border-left: 4px solid #5b8dd6; }
+  .card.neg .card-head { border-left: 4px solid #d66a6a; }
+  .card-head::after {
+    content: "▸";
+    color: var(--muted);
+    transition: transform 0.15s;
+  }
+  .card.open .card-head::after { transform: rotate(90deg); }
+  .card-body {
+    padding: 0 14px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease, padding 0.2s ease;
+  }
+  .card.open .card-body {
+    padding: 14px;
+    max-height: 2000px;
+  }
+  .card-body p { margin-bottom: 8px; }
+  .card-body ul { margin: 4px 0 10px 22px; }
+  .card-body li { margin-bottom: 3px; }
+  .card-body .label {
+    display: inline-block;
+    background: var(--highlight);
+    color: #7a5d00;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-right: 6px;
+  }
+  .card-body .label.trap {
+    background: #fde2e2;
+    color: var(--bad);
+  }
+  .card-body .label.tip {
+    background: #d7edd8;
+    color: var(--good);
+  }
+
+  /* ====================== Rebuttal grids ====================== */
+  .rebuttal-grid {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 10px 0 20px;
+  }
+  .rebuttal-grid .row {
+    display: grid;
+    grid-template-columns: 100px 1fr 2.5fr;
+    border-bottom: 1px solid var(--border);
+  }
+  .rebuttal-grid .row:last-child { border-bottom: none; }
+  .rebuttal-grid .row > div {
+    padding: 8px 12px;
+    border-right: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .rebuttal-grid .row > div:last-child { border-right: none; }
+  .rebuttal-grid .header {
+    background: #eaf1fa;
+    font-weight: 600;
+    color: var(--primary);
+  }
+  .rebuttal-grid .time {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 600;
+    background: #f7f9fc;
+  }
+
+  /* ====================== Notes ====================== */
+  .notes-area {
+    width: 100%;
+    min-height: 200px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+    background: var(--surface);
+  }
+  .scout-entry {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .scout-entry input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+    margin-bottom: 8px;
+  }
+  .scout-entry textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+    resize: vertical;
+  }
+  .btn-small {
+    padding: 4px 10px;
+    font-size: 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: white;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn-small.danger { color: var(--bad); border-color: var(--bad); }
+  .btn-small.primary { background: var(--primary); color: white; border-color: var(--primary); }
+
+  .intro-box {
+    background: var(--highlight);
+    border-left: 4px solid var(--warn);
+    padding: 10px 14px;
+    border-radius: 0 6px 6px 0;
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+
+  .matchup-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .matchup-box h4 {
+    color: var(--primary);
+    font-size: 15px;
+    margin-bottom: 6px;
+  }
+
+  /* ====================== Print ====================== */
+  @media print {
+    #topbar, #sidebar { display: none; }
+    #content { max-width: 100%; padding: 12px; }
+    .panel { display: block !important; page-break-after: always; }
+    .card-body { max-height: none !important; padding: 14px !important; }
+    .card { page-break-inside: avoid; }
+  }
+  @media (max-width: 768px) {
+    #main { flex-direction: column; }
+    #sidebar { width: 100%; position: static; max-height: none; }
+    #content { padding: 16px; }
+    .timers { grid-template-columns: 1fr; }
+    .rebuttal-grid .row { grid-template-columns: 80px 1fr; }
+    .rebuttal-grid .row > div:nth-child(3) {
+      grid-column: 1 / -1;
+      border-top: 1px solid var(--border);
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ====================== TOP BAR ====================== -->
+<div id="topbar">
+  <h1>LD Nationals — Violent Revolution</h1>
+  <div class="pin">Chenoweth: <strong>53%</strong> vs <strong>26%</strong></div>
+  <div class="pin">3.5% rule</div>
+  <div class="pin">Myanmar: <strong>6,000+</strong> killed · PDFs <strong>60%</strong></div>
+  <div class="pin">Sudan: <strong>150,000+</strong> dead · <strong>15M</strong> displaced</div>
+  <div class="pin">Locke §§222, 225</div>
+</div>
+
+<!-- ====================== MAIN ====================== -->
+<div id="main">
+
+<!-- ====================== SIDEBAR ====================== -->
+<nav id="sidebar">
+  <div class="nav-group-title">Timers</div>
+  <button class="nav-btn active" data-panel="timers">⏱ Timers</button>
+
+  <div class="nav-group-title">Affirmative</div>
+  <button class="nav-btn aff" data-panel="aff-cx">AFF CX Questions</button>
+  <button class="nav-btn aff" data-panel="aff-defense">AFF Defense</button>
+  <button class="nav-btn aff" data-panel="aff-rebuttal">AFF Rebuttal Templates</button>
+
+  <div class="nav-group-title">Negative</div>
+  <button class="nav-btn neg" data-panel="neg-cx">NEG CX Questions</button>
+  <button class="nav-btn neg" data-panel="neg-defense">NEG Defense</button>
+  <button class="nav-btn neg" data-panel="neg-rebuttal">NEG Rebuttal Templates</button>
+
+  <div class="nav-group-title">Round Tools</div>
+  <button class="nav-btn" data-panel="scouting">Opponent Scouting</button>
+  <button class="nav-btn" data-panel="flow">Flow Notes</button>
+  <button class="nav-btn" data-panel="matchups">Matchup Map</button>
+  <button class="nav-btn" data-panel="about">About / Help</button>
+</nav>
+
+<!-- ====================== CONTENT ====================== -->
+<main id="content">
+
+<!-- =============== TIMERS =============== -->
+<section class="panel active" id="panel-timers">
+  <h2>Timers</h2>
+  <p>Two timers: prep time (counts down from 4:00) and speech timer (preset buttons for each speech length). Both work offline. Browser must stay open.</p>
+
+  <div class="timers">
+    <div class="timer-card">
+      <div class="timer-label">Prep Time (4:00 total)</div>
+      <div class="timer-display" id="prep-display">4:00</div>
+      <div class="timer-controls">
+        <button id="prep-start" class="primary">Start</button>
+        <button id="prep-pause">Pause</button>
+        <button id="prep-reset">Reset 4:00</button>
+      </div>
+    </div>
+
+    <div class="timer-card">
+      <div class="timer-label">Speech Timer</div>
+      <div class="timer-display" id="speech-display">0:00</div>
+      <div class="timer-controls">
+        <button id="speech-start" class="primary">Start</button>
+        <button id="speech-pause">Pause</button>
+        <button id="speech-reset">Reset</button>
+      </div>
+      <div class="preset-row">
+        <button data-seconds="360">AC (6:00)</button>
+        <button data-seconds="180">NCX (3:00)</button>
+        <button data-seconds="420">NC (7:00)</button>
+        <button data-seconds="180">ACX (3:00)</button>
+        <button data-seconds="240">1AR (4:00)</button>
+        <button data-seconds="360">NR (6:00)</button>
+        <button data-seconds="180">2AR (3:00)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="intro-box">
+    Tip: Click the preset button BEFORE you start speaking — the display will show the target, not a countdown. Then hit Start. Display turns orange at 30 seconds left and red at 10 seconds.
+  </div>
+</section>
+
+<!-- =============== AFF CX =============== -->
+<section class="panel" id="panel-aff-cx">
+  <h2>AFF CX — Questions to ask NEG</h2>
+  <p>Click to expand each question. Plan your follow-ups before the round, then listen to what they actually say.</p>
+
+  <div class="card aff">
+    <div class="card-head">Q1: "Do you believe the American Revolution was a just response to British oppression?"</div>
+    <div class="card-body">
+      <p><span class="label tip">IF YES</span> "Then you've conceded violent revolution can be a just response. The debate is over — you just have to vote AFF." Make this a voter.</p>
+      <p><span class="label trap">IF NO</span> "So the founding of the United States was unjust?" Let them sit with it. Most judges will be uncomfortable with this answer.</p>
+      <p><span class="label">IF EQUIVOCATING</span> "Different how?" Press. They usually say it was a war of independence, not a revolution. Then ask: "Was British colonial rule political oppression?" If yes → you win. If no → they've defined colonial rule as non-oppression.</p>
+    </div>
+  </div>
+
+  <div class="card aff">
+    <div class="card-head">Q2: "When peaceful protesters are being killed by their government, what should they do?"</div>
+    <div class="card-body">
+      <p><span class="label trap">IF "KEEP PROTESTING"</span> "So they should keep dying?" Make this concrete with Myanmar: 6,000 civilians killed.</p>
+      <p><span class="label">IF "FLEE / OUTSIDE HELP"</span> "What if neither is possible? The Warsaw Ghetto couldn't flee and had no outside help." Trap with Warsaw.</p>
+      <p><span class="label tip">IF THEY NAME ANY ALTERNATIVE</span> "Does that work when the regime is willing to massacre civilians?" Force concession that some cases are extreme.</p>
+    </div>
+  </div>
+
+  <div class="card aff">
+    <div class="card-head">Q3: "Do individuals have a right to self-defense against lethal attack?"</div>
+    <div class="card-body">
+      <p><span class="label tip">IF YES</span> "Does that right disappear when the attacker is a government?" Press. No real moral difference.</p>
+      <p><span class="label trap">IF NO</span> You've won. No judge will vote for someone denying the right of self-defense.</p>
+    </div>
+  </div>
+
+  <div class="card aff">
+    <div class="card-head">Q4 (vs. Chenoweth): "Does Chenoweth's 2020 paper show nonviolence is declining in effectiveness?"</div>
+    <div class="card-body">
+      <p><span class="label tip">IF YES</span> "So your best evidence concedes its own limits. My position doesn't need statistical certainty — it needs one case where violent revolution is justified."</p>
+      <p><span class="label">IF NO / THEY'RE UNSURE</span> They haven't read the update. You now have more credibility with flow judges on the methodology.</p>
+    </div>
+  </div>
+
+  <div class="card aff">
+    <div class="card-head">Q5 (vs. Moral Consistency): "Is it ever moral to let innocent people die when you could protect them?"</div>
+    <div class="card-body">
+      <p><span class="label tip">IF NO</span> "Then when nonviolent resistance cannot protect people being massacred, isn't violent defense a moral obligation?"</p>
+      <p><span class="label">IF YES</span> Their "moral consistency" is consistency in accepting deaths. Flip it.</p>
+    </div>
+  </div>
+</section>
+
+<!-- =============== AFF DEFENSE =============== -->
+<section class="panel" id="panel-aff-defense">
+  <h2>AFF Defense — Answers to hard NCX questions</h2>
+  <p>The NCX is 3:00. NEG will target your weakest points. Prepared answers for the hardest ones.</p>
+
+  <div class="card aff">
+    <div class="card-head">"Chenoweth's data proves nonviolence works twice as often."</div>
+    <div class="card-body">
+      <p><strong>You answer:</strong> "Chenoweth's 2020 paper says that advantage is shrinking — both violent and nonviolent resistance are declining since 2010. Her dataset also excludes the Warsaw Ghetto, which everyone agrees was justified violent resistance. And we're not debating whether nonviolence is usually better. We're debating whether violent revolution is <em>ever</em> a just response. One case is enough."</p>
+    </div>
+  </div>
+
+  <div class="card aff">
+    <div class="card-head">"Violent revolutions produce new dictators — Russia, Iran, France."</div>
+    <div class="card-body">
+      <p><strong>You answer:</strong> "I don't defend every violent revolution. I defend revolutions that meet my conditions — a long train of abuses, no lawful remedy. The Warsaw Ghetto wasn't about building a new regime. Myanmar's PDFs protect civilians. The American Revolution produced a democracy. The Haitian Revolution ended slavery. Bad outcomes in some cases don't prove all."</p>
+    </div>
+  </div>
+
+  <div class="card aff">
+    <div class="card-head">"You can't defend the Reign of Terror."</div>
+    <div class="card-body">
+      <p><strong>You answer:</strong> "I don't have to. The Reign of Terror was a revolutionary regime purging internal rivals after the oppressor was gone. My framework defends revolution as a response to <em>oppression</em>. The Terror wasn't that — it was internal factional violence. My framework excludes it."</p>
+    </div>
+  </div>
+
+  <div class="card aff">
+    <div class="card-head">"The American Revolution was unique — can't generalize from it."</div>
+    <div class="card-body">
+      <p><strong>You answer:</strong> "I'm not generalizing. I'm using it as proof that violent revolution CAN be just. The resolution asks whether it IS a just response, and one clear case settles it. My opponent needs to argue the American Revolution was unjust — a position no judge will accept."</p>
+    </div>
+  </div>
+
+  <div class="card aff">
+    <div class="card-head">"The means shape the ends — violence produces violent societies."</div>
+    <div class="card-body">
+      <p><strong>You answer:</strong> "If means shape ends, consider the society produced by accepting oppression. Sudan's peaceful revolution didn't dismantle the institutions of violence — 150,000 are dead. Means don't just shape ends; ends also shape means. Sometimes you have to use force to stop worse force. That's the logic of self-defense at every level."</p>
+    </div>
+  </div>
+
+  <div class="card aff">
+    <div class="card-head">"Myanmar isn't over — outcome is uncertain."</div>
+    <div class="card-body">
+      <p><strong>You answer:</strong> "Agreed that Myanmar isn't resolved. But the moral question is about what was justified at the time, not what eventually happens. When the Tatmadaw was slaughtering civilians and only armed resistance could protect them, armed resistance was justified. Full stop. The outcome years later doesn't retroactively delete that moral reality."</p>
+    </div>
+  </div>
+</section>
+
+<!-- =============== AFF REBUTTAL =============== -->
+<section class="panel" id="panel-aff-rebuttal">
+  <h2>AFF Rebuttal Templates</h2>
+
+  <h3>1AR template (4:00) — generic</h3>
+  <div class="rebuttal-grid">
+    <div class="row header">
+      <div>Time</div>
+      <div>Task</div>
+      <div>What to do</div>
+    </div>
+    <div class="row">
+      <div class="time">0:00–0:30</div>
+      <div>Framework</div>
+      <div>Extend your V and VC. ONE reason yours is superior. 30 seconds, no more.</div>
+    </div>
+    <div class="row">
+      <div class="time">0:30–1:45</div>
+      <div>Answer NC</div>
+      <div>Go down their case line-by-line. Group where you can. Turns + defense.</div>
+    </div>
+    <div class="row">
+      <div class="time">1:45–3:15</div>
+      <div>Extend AC</div>
+      <div>Extend your contentions, answer their attacks on each. Biggest block.</div>
+    </div>
+    <div class="row">
+      <div class="time">3:15–4:00</div>
+      <div>Voters + weighing</div>
+      <div>2-3 reasons to vote AFF. Compare your impacts to theirs directly.</div>
+    </div>
+  </div>
+
+  <h3>1AR for Locke vs. Chenoweth</h3>
+  <div class="rebuttal-grid">
+    <div class="row header"><div>Time</div><div>Move</div><div>Content</div></div>
+    <div class="row"><div class="time">0:00–0:30</div><div>Extend framework</div><div>Justice + Social Contract. "Just" = permissible, not optimal.</div></div>
+    <div class="row"><div class="time">0:30–1:30</div><div>Attack Chenoweth</div><div>2020 update; dataset exclusions; statistics don't settle rights questions.</div></div>
+    <div class="row"><div class="time">1:30–3:15</div><div>Extend AC</div><div>Extend Locke, American Revolution, high-bar conditions. Names and dates.</div></div>
+    <div class="row"><div class="time">3:15–4:00</div><div>Weigh</div><div>"Lockean framework precedes and explains when any response is just, including the nonviolent ones."</div></div>
+  </div>
+
+  <h3>1AR for Self-Defense vs. King-Gandhi</h3>
+  <div class="rebuttal-grid">
+    <div class="row header"><div>Time</div><div>Move</div><div>Content</div></div>
+    <div class="row"><div class="time">0:00–0:30</div><div>Extend framework</div><div>Human Dignity + Protection of Innocent Life.</div></div>
+    <div class="row"><div class="time">0:30–1:45</div><div>Attack King-Gandhi</div><div>Framework asks oppressed to die peacefully. Concrete: Myanmar, Warsaw.</div></div>
+    <div class="row"><div class="time">1:45–3:15</div><div>Extend AC</div><div>6,000 killed, 2.7M displaced, 60% liberated. Warsaw Ghetto. Sudan as AFF peg.</div></div>
+    <div class="row"><div class="time">3:15–4:00</div><div>Emotional weigh</div><div>"Kyal Sin did not need moral consistency. She needed protection."</div></div>
+  </div>
+
+  <h3>2AR template (3:00)</h3>
+  <div class="rebuttal-grid">
+    <div class="row header"><div>Time</div><div>Task</div><div>What to do</div></div>
+    <div class="row"><div class="time">0:00–0:30</div><div>Frame</div><div>ONE sentence why AFF wins.</div></div>
+    <div class="row"><div class="time">0:30–1:30</div><div>Extend through NR</div><div>2-3 AC arguments that survived NR. Extend them.</div></div>
+    <div class="row"><div class="time">1:30–2:15</div><div>Weigh</div><div>Direct comparison. Your best argument vs. theirs. Why yours wins.</div></div>
+    <div class="row"><div class="time">2:15–3:00</div><div>Voters + close</div><div>Clean voters. Call for ballot. Last memory.</div></div>
+  </div>
+  <div class="intro-box"><strong>2AR rule:</strong> No new arguments. Judges will cross them. Extend, weigh, close.</div>
+</section>
+
+<!-- =============== NEG CX =============== -->
+<section class="panel" id="panel-neg-cx">
+  <h2>NEG CX — Questions to ask AFF</h2>
+
+  <div class="card neg">
+    <div class="card-head">Q1: "If a less harmful alternative exists, isn't that what justice requires?"</div>
+    <div class="card-body">
+      <p><span class="label tip">IF YES</span> "Then your position depends on proving nonviolence wouldn't work in your specific case. Can you prove it?" They now have an empirical burden.</p>
+      <p><span class="label trap">IF NO</span> "So justice doesn't care about effectiveness or harm?" Strange position — let it sit.</p>
+    </div>
+  </div>
+
+  <div class="card neg">
+    <div class="card-head">Q2: "Name a violent revolution in the past century that produced a stable liberal democracy."</div>
+    <div class="card-body">
+      <p><span class="label">IF AMERICAN REVOLUTION</span> "That was 1776 — not the past century. I asked about modern cases."</p>
+      <p><span class="label">IF THEY NAME ONE</span> Press on what happened next. Haiti — one of the poorest countries in the Americas. Algeria — authoritarian one-party state.</p>
+      <p><span class="label tip">IF THEY CAN'T</span> "So the modern track record is consistent authoritarian outcomes. That's not justice — that's reproducing oppression."</p>
+    </div>
+  </div>
+
+  <div class="card neg">
+    <div class="card-head">Q3: "Do you accept Chenoweth's 53%/26% finding?"</div>
+    <div class="card-body">
+      <p><span class="label tip">IF YES</span> "So you concede nonviolence is more effective. How is the less effective response the just one?"</p>
+      <p><span class="label">IF NO</span> "What research do you use?" They likely have none equivalent.</p>
+      <p><span class="label">IF "YES BUT 2020 UPDATE"</span> "Update says BOTH are declining, nonviolence still ahead. You agree?" Force concession.</p>
+    </div>
+  </div>
+
+  <div class="card neg">
+    <div class="card-head">Q4: "Do you agree the means we use shape the society we end up with?"</div>
+    <div class="card-body">
+      <p><span class="label tip">IF YES</span> Anchor for the round. "Then revolutionary violence creates a society where violence is the tool of politics — the pattern from France to Russia to Iran."</p>
+      <p><span class="label trap">IF NO</span> They've denied that methods affect outcomes. A difficult position.</p>
+    </div>
+  </div>
+
+  <div class="card neg">
+    <div class="card-head">Q5: "Did Sudan's nonviolent revolution fail, or did violent institutions cause the failure?"</div>
+    <div class="card-body">
+      <p><span class="label tip">IF VIOLENT INSTITUTIONS</span> "So the lesson of Sudan isn't 'need violent revolution' — it's 'must dismantle violent institutions,' which is my point exactly."</p>
+      <p><span class="label">IF NONVIOLENCE FAILED</span> Press: "The civilian government was overthrown by generals with military power — nonviolent activists had disbanded their organizations. That's a security-sector failure, not a strategy failure."</p>
+    </div>
+  </div>
+</section>
+
+<!-- =============== NEG DEFENSE =============== -->
+<section class="panel" id="panel-neg-defense">
+  <h2>NEG Defense — Answers to hard ACX questions</h2>
+
+  <div class="card neg">
+    <div class="card-head">"The American Revolution proves violent revolution can be just."</div>
+    <div class="card-body">
+      <p><strong>You answer:</strong> "The American Revolution was a war of independence, not a domestic revolution. The colonists separated from Britain rather than overthrowing it from within. Even accepting it as just, it took 87 more years and a civil war that killed 700,000 to abolish slavery. That's the means-shaping-ends problem. Compare India — independent largely nonviolently, functioning democracy from day one."</p>
+    </div>
+  </div>
+
+  <div class="card neg">
+    <div class="card-head">"Myanmar / Warsaw Ghetto — nonviolence fails. Violence is the only option."</div>
+    <div class="card-body">
+      <p><strong>You answer:</strong> "Self-defense in an active attack isn't what the resolution debates. The resolution asks about violent REVOLUTION — organized, prolonged overthrow. I accept Warsaw as self-defense. I reject the move from 'self-defense justified' to 'revolution just.' Different propositions. Myanmar's war is unresolved, and its Civil Disobedience Movement caused 16,000 defections — nonviolence IS working."</p>
+    </div>
+  </div>
+
+  <div class="card neg">
+    <div class="card-head">"You have to defend pacifism — violence never okay."</div>
+    <div class="card-body">
+      <p><strong>You answer:</strong> "I don't. I accept self-defense in immediate attack. I reject violent REVOLUTION — organized, prolonged armed overthrow. Means shape ends; revolutionary violence has a terrible track record of producing new oppression. The Russian Revolution gave us Stalin. The Iranian Revolution gave us the regime now killing protesters."</p>
+    </div>
+  </div>
+
+  <div class="card neg">
+    <div class="card-head">"Chenoweth's 2020 update undermines your case."</div>
+    <div class="card-body">
+      <p><strong>You answer:</strong> "The update says BOTH methods are declining — and violent campaigns are at 10% success since 2010. 90% failure is not a just response; it's a plan to fail with casualties. Nonviolence still beats violence. The ratio favors NEG."</p>
+    </div>
+  </div>
+
+  <div class="card neg">
+    <div class="card-head">"Sudan proves nonviolent revolution is not enough."</div>
+    <div class="card-body">
+      <p><strong>You answer:</strong> "Sudan's nonviolent revolution in 2019 succeeded. What failed was the transition — the military was left in place. That's not a failure of nonviolence; it's the institution of state violence reasserting itself. Freedom House (April 2025) confirms Sudanese resistance committees are STILL the most legitimate political force. The lesson is dismantle violent institutions — but violent counter-revolution just creates NEW violent institutions."</p>
+    </div>
+  </div>
+
+  <div class="card neg">
+    <div class="card-head">"Nonviolence is privileged pacifism — easy to preach from safety."</div>
+    <div class="card-body">
+      <p><strong>You answer:</strong> "Gandhi was imprisoned multiple times. King was assassinated. Havel was imprisoned for four years. The Filipinos who faced Marcos's death squads weren't privileged. Calling disciplined nonviolence 'privileged' erases people who died for it. Meanwhile, revolutionary violence typically empowers warlords and people with weapons — that's a different kind of privilege."</p>
+    </div>
+  </div>
+</section>
+
+<!-- =============== NEG REBUTTAL =============== -->
+<section class="panel" id="panel-neg-rebuttal">
+  <h2>NEG Rebuttal Templates</h2>
+
+  <h3>NR template (6:00) — generic</h3>
+  <div class="rebuttal-grid">
+    <div class="row header"><div>Time</div><div>Task</div><div>What to do</div></div>
+    <div class="row"><div class="time">0:00–0:30</div><div>Overview</div><div>ONE sentence: what the round comes down to.</div></div>
+    <div class="row"><div class="time">0:30–2:30</div><div>Extend NC</div><div>Go through NC contentions, show they still stand, extend evidence.</div></div>
+    <div class="row"><div class="time">2:30–4:30</div><div>Attack AC</div><div>Don't line-by-line. Pick 2-3 strongest AC arguments, attack those.</div></div>
+    <div class="row"><div class="time">4:30–5:30</div><div>Voters</div><div>Three clear voters with warrants. "Three reasons you vote NEG."</div></div>
+    <div class="row"><div class="time">5:30–6:00</div><div>Close</div><div>Final weighing. Tie to your value. Memorable last line.</div></div>
+  </div>
+
+  <h3>NR for Chenoweth vs. Locke</h3>
+  <div class="rebuttal-grid">
+    <div class="row header"><div>Time</div><div>Move</div><div>Content</div></div>
+    <div class="row"><div class="time">0:00–0:30</div><div>Frame</div><div>"Justice requires the response that actually ends oppression with least harm."</div></div>
+    <div class="row"><div class="time">0:30–2:30</div><div>Extend NC</div><div>53%/26%. 3.5% rule. Philippines, Serbia, Czechoslovakia. Concede 2020 update, show ratio still favors nonviolence.</div></div>
+    <div class="row"><div class="time">2:30–4:30</div><div>Attack Locke</div><div>17th-century framework; conditions rarely apply in practice; American Rev not the template for modern revolutions.</div></div>
+    <div class="row"><div class="time">4:30–5:30</div><div>Voters</div><div>(1) Data on NEG side, (2) outcomes matter for justice, (3) violent revolution produces more oppression.</div></div>
+    <div class="row"><div class="time">5:30–6:00</div><div>Close</div><div>"For 53 vs. 26, for the people who walked free because their neighbors marched — vote NEG."</div></div>
+  </div>
+
+  <h3>NR for King-Gandhi vs. Self-Defense</h3>
+  <div class="rebuttal-grid">
+    <div class="row header"><div>Time</div><div>Move</div><div>Content</div></div>
+    <div class="row"><div class="time">0:00–0:30</div><div>Frame</div><div>"The means we use shape the society we end up with. Violence begets violence."</div></div>
+    <div class="row"><div class="time">0:30–2:30</div><div>Extend NC</div><div>Civil Rights Movement outcomes. Iran 1979 → current regime. French Revolution numbers.</div></div>
+    <div class="row"><div class="time">2:30–4:30</div><div>Attack Self-Defense</div><div>Self-defense ≠ revolution; Myanmar unresolved; Warsaw was self-defense not revolution.</div></div>
+    <div class="row"><div class="time">4:30–5:30</div><div>Voters</div><div>(1) Means shape ends, (2) post-revolutionary outcomes consistently authoritarian, (3) nonviolence has protected MORE lives historically.</div></div>
+    <div class="row"><div class="time">5:30–6:00</div><div>Close</div><div>"Dignity is what we refuse to surrender. Violence is the surrender."</div></div>
+  </div>
+</section>
+
+<!-- =============== SCOUTING =============== -->
+<section class="panel" id="panel-scouting">
+  <h2>Opponent Scouting</h2>
+  <p>Add entries for each opponent. Saved for the current browser session only (cleared when tab closes).</p>
+  <button class="btn-small primary" id="add-scout">+ Add Opponent</button>
+  <div id="scout-entries" style="margin-top: 16px;"></div>
+</section>
+
+<!-- =============== FLOW =============== -->
+<section class="panel" id="panel-flow">
+  <h2>Flow Notes — Current Round</h2>
+  <p>Per-round notes. Saved in this browser tab for the session. Clear before each round.</p>
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+    <input id="flow-round-label" placeholder="Round label (e.g., R3 vs Denver East)" style="flex: 1; margin-right: 10px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 14px;">
+    <button class="btn-small" id="clear-flow">Clear</button>
+  </div>
+  <textarea id="flow-notes" class="notes-area" placeholder="AC:
+- Value:
+- Criterion:
+- C1:
+- C2:
+- C3:
+
+NC:
+- Value:
+- Criterion:
+- C1:
+- C2:
+- C3:
+
+Key exchanges in CX:
+"></textarea>
+</section>
+
+<!-- =============== MATCHUPS =============== -->
+<section class="panel" id="panel-matchups">
+  <h2>Matchup Map — 8 Likely Scenarios</h2>
+  <p>If you see one of these coming, execute the plan.</p>
+
+  <div class="matchup-box">
+    <h4>1. AFF Locke vs. NEG Chenoweth</h4>
+    <p>Most likely nationals matchup. Round turns on framework.</p>
+    <ul>
+      <li><strong>AFF plan:</strong> Win "just" = "justified," not "optimal outcome." Chenoweth is about effectiveness, which is separate.</li>
+      <li><strong>NEG plan:</strong> Win "just" includes consequences. Predictable failure can't be just.</li>
+    </ul>
+  </div>
+
+  <div class="matchup-box">
+    <h4>2. AFF Self-Defense vs. NEG King-Gandhi</h4>
+    <p>Emotional case both sides. Specific cases win.</p>
+    <ul>
+      <li><strong>AFF plan:</strong> Anchor in Myanmar. Push NEG to say what peaceful protesters should do.</li>
+      <li><strong>NEG plan:</strong> Civil Rights + Sudan. Widen the debate beyond one case.</li>
+    </ul>
+  </div>
+
+  <div class="matchup-box">
+    <h4>3. AFF Locke vs. NEG King-Gandhi</h4>
+    <p>Philosophy vs. philosophy.</p>
+    <ul>
+      <li><strong>AFF plan:</strong> Press American Revolution — NEG's framework condemns it.</li>
+      <li><strong>NEG plan:</strong> Don't concede American Rev is unjust. Argue ATYPICAL + 87 more years to abolish slavery.</li>
+    </ul>
+  </div>
+
+  <div class="matchup-box">
+    <h4>4. AFF Self-Defense vs. NEG Chenoweth</h4>
+    <p>Narrative vs. statistics.</p>
+    <ul>
+      <li><strong>AFF plan:</strong> Attack dataset. Excludes Warsaw. 2020 update shows decline.</li>
+      <li><strong>NEG plan:</strong> 323 data points beat anecdote. Even in decline, nonviolence wins.</li>
+    </ul>
+  </div>
+
+  <div class="matchup-box">
+    <h4>5. AFF Fanon vs. NEG Arendt (if used)</h4>
+    <p>Textbook clash.</p>
+    <ul>
+      <li><strong>AFF plan:</strong> Fanon's context — colonial structural violence IS violence. Algeria ended 130 years of rule.</li>
+      <li><strong>NEG plan:</strong> Arendt — means overwhelm ends. Algeria became authoritarian one-party state.</li>
+    </ul>
+  </div>
+
+  <div class="matchup-box">
+    <h4>6. AFF Just War vs. NEG Probability of Success</h4>
+    <p>Rare technical exchange. Both sides agree on framework.</p>
+    <ul>
+      <li><strong>AFF plan:</strong> American Rev, Warsaw, Haitian — clear probability-of-success cases. Judge ex ante.</li>
+      <li><strong>NEG plan:</strong> Chenoweth 2020 — 10% since 2010. Attack last resort too.</li>
+    </ul>
+  </div>
+
+  <div class="matchup-box">
+    <h4>7. AFF Consequentialist vs. NEG Consequentialist</h4>
+    <p>Body-count debate.</p>
+    <ul>
+      <li><strong>AFF plan:</strong> Nazi Europe, apartheid, Syria — ongoing oppression killed more than any plausible revolution.</li>
+      <li><strong>NEG plan:</strong> Russian Rev (7-12M), French Rev, Chinese Rev — revolutionary violence expands beyond its goals.</li>
+    </ul>
+  </div>
+
+  <div class="matchup-box">
+    <h4>8. AFF or NEG runs a K (Kritik)</h4>
+    <p>Not recommended for this team, but expected from some circuits.</p>
+    <ul>
+      <li><strong>If AFF faces K:</strong> Anchor in cases where oppressed chose armed resistance themselves. You're not speaking for them.</li>
+      <li><strong>If NEG faces K:</strong> Structural critique doesn't excuse you from which response is actually best for the oppressed.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- =============== ABOUT =============== -->
+<section class="panel" id="panel-about">
+  <h2>About / Help</h2>
+  <p><strong>Purpose:</strong> Open this dashboard in a browser tab during rounds. Works offline. All content stored locally in the browser; nothing is sent anywhere.</p>
+  <p><strong>Navigation:</strong> Use the sidebar on the left to switch between panels. Click cards to expand/collapse.</p>
+  <p><strong>Timers:</strong> Prep timer counts down from 4:00. Speech timer counts up OR set a target with the preset buttons. Color changes at 30 seconds (orange) and 10 seconds (red).</p>
+  <p><strong>Scouting and Flow Notes:</strong> Both save to the browser session. They're cleared when you close the tab.</p>
+  <p><strong>Printing:</strong> Use the browser's Print function to get a hard copy with all panels visible.</p>
+  <p><strong>Keyboard shortcuts:</strong></p>
+  <ul>
+    <li>Space — Start / pause whichever timer is active (prep if nonzero, else speech)</li>
+    <li>R — Reset active timer</li>
+  </ul>
+  <p><strong>Contents overview:</strong></p>
+  <ul>
+    <li>AFF CX — Questions to ask NEG with branching follow-ups</li>
+    <li>AFF Defense — Prepared answers for the hardest NEG attacks</li>
+    <li>AFF Rebuttal — Timed pacing for 1AR and 2AR</li>
+    <li>NEG CX — Questions to ask AFF with branching follow-ups</li>
+    <li>NEG Defense — Prepared answers for the hardest AFF attacks</li>
+    <li>NEG Rebuttal — Timed pacing for NR</li>
+    <li>Opponent Scouting — Track your opponents by name and notes</li>
+    <li>Flow Notes — Per-round note-taking scratch pad</li>
+    <li>Matchup Map — 8 likely case-vs-case scenarios with game plans</li>
+  </ul>
+</section>
+
+</main>
+</div>
+
+<script>
+// ==================== Navigation ====================
+const navButtons = document.querySelectorAll('.nav-btn');
+const panels = document.querySelectorAll('.panel');
+
+navButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    navButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const panelId = btn.dataset.panel;
+    panels.forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + panelId).classList.add('active');
+    window.scrollTo(0, 0);
+  });
+});
+
+// ==================== Card expand/collapse ====================
+document.querySelectorAll('.card-head').forEach(head => {
+  head.addEventListener('click', () => {
+    head.parentElement.classList.toggle('open');
+  });
+});
+
+// ==================== Timers ====================
+function createTimer(displayId, startId, pauseId, resetId, defaultSeconds, countDown) {
+  const display = document.getElementById(displayId);
+  const startBtn = document.getElementById(startId);
+  const pauseBtn = document.getElementById(pauseId);
+  const resetBtn = document.getElementById(resetId);
+
+  let seconds = defaultSeconds;
+  let initialSeconds = defaultSeconds;
+  let running = false;
+  let intervalId = null;
+
+  function format(s) {
+    if (s < 0) s = 0;
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return m + ':' + (rem < 10 ? '0' : '') + rem;
+  }
+
+  function updateDisplay() {
+    display.textContent = format(seconds);
+    display.classList.remove('warn', 'crit');
+    if (countDown) {
+      if (seconds <= 10 && seconds > 0) display.classList.add('crit');
+      else if (seconds <= 30 && seconds > 10) display.classList.add('warn');
+    } else {
+      const remaining = initialSeconds - seconds;
+      if (initialSeconds > 0 && remaining <= 10 && remaining > 0) display.classList.add('crit');
+      else if (initialSeconds > 0 && remaining <= 30 && remaining > 10) display.classList.add('warn');
+    }
+  }
+
+  function tick() {
+    if (countDown) {
+      seconds--;
+      if (seconds <= 0) {
+        seconds = 0;
+        stop();
+      }
+    } else {
+      seconds++;
+      if (initialSeconds > 0 && seconds >= initialSeconds) {
+        stop();
+      }
+    }
+    updateDisplay();
+  }
+
+  function start() {
+    if (running) return;
+    running = true;
+    intervalId = setInterval(tick, 1000);
+  }
+  function stop() {
+    running = false;
+    if (intervalId) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
+  }
+  function reset(newSeconds) {
+    stop();
+    seconds = newSeconds !== undefined ? newSeconds : defaultSeconds;
+    initialSeconds = seconds;
+    updateDisplay();
+  }
+
+  startBtn.addEventListener('click', start);
+  pauseBtn.addEventListener('click', stop);
+  resetBtn.addEventListener('click', () => reset(defaultSeconds));
+
+  updateDisplay();
+  return { start, stop, reset, isRunning: () => running,
+           setTarget: (s) => { reset(countDown ? s : 0); initialSeconds = s; updateDisplay(); } };
+}
+
+const prepTimer = createTimer('prep-display', 'prep-start', 'prep-pause', 'prep-reset', 240, true);
+const speechTimer = createTimer('speech-display', 'speech-start', 'speech-pause', 'speech-reset', 0, false);
+
+// Preset buttons for speech timer
+document.querySelectorAll('.preset-row button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const s = parseInt(btn.dataset.seconds, 10);
+    speechTimer.setTarget(s);
+  });
+});
+
+// ==================== Keyboard shortcuts ====================
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+  if (e.key === ' ') {
+    e.preventDefault();
+    if (prepTimer.isRunning()) prepTimer.stop();
+    else if (speechTimer.isRunning()) speechTimer.stop();
+    else speechTimer.start();
+  } else if (e.key === 'r' || e.key === 'R') {
+    speechTimer.reset(0);
+  }
+});
+
+// ==================== Scouting ====================
+const scoutContainer = document.getElementById('scout-entries');
+const addScoutBtn = document.getElementById('add-scout');
+let scoutData = [];
+
+function renderScouting() {
+  scoutContainer.innerHTML = '';
+  scoutData.forEach((entry, idx) => {
+    const div = document.createElement('div');
+    div.className = 'scout-entry';
+    div.innerHTML =
+      '<input data-idx="' + idx + '" data-field="name" placeholder="Opponent name / school" value="' + escapeHtml(entry.name) + '">' +
+      '<input data-idx="' + idx + '" data-field="case" placeholder="Case type (Locke AFF / Chenoweth NEG / etc)" value="' + escapeHtml(entry.caseType) + '">' +
+      '<textarea data-idx="' + idx + '" data-field="notes" placeholder="Notes: arguments, style, tells, what worked, what didn\'t">' + escapeHtml(entry.notes) + '</textarea>' +
+      '<button class="btn-small danger" data-idx="' + idx + '" style="margin-top: 6px;">Delete</button>';
+    scoutContainer.appendChild(div);
+  });
+
+  scoutContainer.querySelectorAll('input, textarea').forEach(el => {
+    el.addEventListener('input', () => {
+      const idx = parseInt(el.dataset.idx, 10);
+      const field = el.dataset.field;
+      if (field === 'name') scoutData[idx].name = el.value;
+      else if (field === 'case') scoutData[idx].caseType = el.value;
+      else if (field === 'notes') scoutData[idx].notes = el.value;
+    });
+  });
+  scoutContainer.querySelectorAll('button.danger').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      scoutData.splice(idx, 1);
+      renderScouting();
+    });
+  });
+}
+
+function escapeHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+addScoutBtn.addEventListener('click', () => {
+  scoutData.push({ name: '', caseType: '', notes: '' });
+  renderScouting();
+});
+
+// ==================== Flow clear ====================
+document.getElementById('clear-flow').addEventListener('click', () => {
+  if (confirm('Clear flow notes for this round?')) {
+    document.getElementById('flow-notes').value = '';
+    document.getElementById('flow-round-label').value = '';
+  }
+});
+</script>
+
+</body>
+</html>
