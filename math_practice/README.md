@@ -27,6 +27,16 @@ Notes:
 - Cookies may not work when opening `index.html` directly from the filesystem, so use the local HTTP server for testing.
 - The JS avoids nullish coalescing, optional chaining, arrows, `const`, `let`, classes, and template literals so older `node --check` versions can parse it.
 
+Grading model:
+
+The test scores binary (1 or 0 per question). To score 1, the student's answer must
+strict-match `acceptedAnswers[0]` up to case and whitespace only. The strict match
+mirrors the binary placement-test scoring it's preparing them for. A second loose
+match against `looseAcceptedAnswers` is run only for diagnostic feedback in the
+review screen, to distinguish "right math, wrong format" (Format error) from
+"wrong value" (Math error). Both errors score zero on the test; the distinction
+only changes how the missed-problem feedback is labeled.
+
 Adding a new test:
 
 Edit `math-practice.js` and add another object to the `TESTS` array. Each question supports:
@@ -34,8 +44,14 @@ Edit `math-practice.js` and add another object to the `TESTS` array. Each questi
 ```js
 {
   prompt: "Problem text",
-  preferredAnswer: "Answer displayed during review",
-  acceptedAnswers: ["Answer", "Equivalent answer"],
+  preferredAnswer: "Canonical answer in the exact form that scores credit",
+  acceptedAnswers: ["Canonical answer"],   // strict: usually just [preferredAnswer]
+  looseAcceptedAnswers: [                   // loose: equivalent forms for the
+    "Canonical answer",                     //        Format-error diagnostic
+    "Equivalent improper fraction",
+    "Decimal equivalent",
+    "Alternate unit spelling"
+  ],
   topic: "Optional topic label",
   visual: {
     type: "linePlot",
