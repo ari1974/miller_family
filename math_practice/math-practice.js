@@ -10,9 +10,9 @@
   node --check versions can parse it.
 */
 
-var APP_VERSION = "2026-05-25-v5";
-var RESULT_COOKIE = "mathPracticeResultsV5";
-var STORAGE_KEY = "mathPracticeStateV5";
+var APP_VERSION = "2026-05-25-v6";
+var RESULT_COOKIE = "mathPracticeResultsV6";
+var STORAGE_KEY = "mathPracticeStateV6";
 
 var TESTS = [
   {
@@ -2279,24 +2279,20 @@ function ensureDraft(state, testId) {
 /*
   Grading model
   -------------
-  This practice mirrors a placement test that scores binary (full credit or
-  none) and is strict about answer format. There are two grading checks:
+  The score is teacher-style lenient: if the math is right, you get the point,
+  regardless of whether the form is the most preferred one. There are two checks:
 
-  - isCorrectAnswer (strict): the only check that scores the test. The student
-    must write the canonical answer up to case and whitespace differences.
-    Equivalents like "1.25" for "1 1/4", or "cm^2" for "square centimeters",
-    do NOT score.
+  - isCorrectAnswer (strict): used only as a flag for "this was already the
+    preferred form, no format suggestion needed".
 
-  - isMathCorrect (loose): a diagnostic-only check, used in the review screen
-    to tell apart "wrong math" from "right math, wrong format". It accepts
-    a wider set of equivalent forms (improper vs mixed, sq cm vs cm^2,
-    plural vs singular, etc.).
+  - isMathCorrect (loose): used for scoring. Accepts any equivalent form
+    (improper vs mixed, sq cm vs cm^2, plural vs singular, etc.).
 
   getAnswerStatus returns one of:
-    "correct"     - strict match; the test gives credit
-    "format-only" - math is right, format is wrong; no credit, shown for
-                    diagnostic feedback so the student learns the convention
-    "wrong"       - math is wrong (or answer is blank)
+    "correct"     - math right AND already in preferred form; full credit, no note
+    "format-only" - math right but in an alternate form; full credit, with a
+                    coaching note showing the preferred form
+    "wrong"       - math wrong (or blank); no credit, shown in the missed section
 */
 
 function normalizeStrict(value) {
@@ -2411,8 +2407,8 @@ function render() {
 function renderFormatRules() {
   var html = '';
   html += '<section class="card">';
-  html += '<div class="row between"><h2 style="margin:0;">Answer Format Rules</h2><button class="secondary" data-action="home">Back to tests</button></div>';
-  html += '<p>Scoring is binary. Each question is worth 1 point, given <strong>only when your answer matches the exact canonical form</strong>. A right value in the wrong form scores zero. This mirrors how the real placement test will be scored.</p>';
+  html += '<div class="row between"><h2 style="margin:0;">Answer Format Tips</h2><button class="secondary" data-action="home">Back to tests</button></div>';
+  html += '<p>The practice gives you credit for any reasonable answer that&rsquo;s mathematically right &mdash; mixed number or improper fraction, with or without commas, <code>cm^2</code> or <code>square centimeters</code>, all count. These tips show the form the <strong>real placement test</strong> is most likely to want, so the habit is in place by then.</p>';
 
   html += '<h3>Whole numbers</h3>';
   html += '<ul>';
@@ -2459,7 +2455,7 @@ function renderFormatRules() {
   html += '</ul>';
 
   html += '<h3>What the practice does</h3>';
-  html += '<p class="small subtle">If your answer is mathematically right but written in the wrong form, the practice still gives zero credit, but flags it as a <strong>Format error</strong> in the review screen so you can see the difference between &ldquo;I didn\'t know how to do this problem&rdquo; and &ldquo;I knew the answer but wrote it wrong.&rdquo; The placement test will not give that feedback. Train the habit here.</p>';
+  html += '<p class="small subtle">If your answer is right but written in an alternate form, you still get credit. The review screen will show a <strong>Format tip</strong> for those, with the preferred form to aim for next time. The placement test won&rsquo;t give that feedback, so the practice provides it instead.</p>';
 
   html += '<div class="row" style="margin-top:16px;"><button class="secondary" data-action="home">Back to tests</button></div>';
   html += '</section>';
@@ -2471,8 +2467,8 @@ function renderHome() {
   var html = '';
   var i;
   html += '<section class="card">';
-  html += '<div class="row between"><h2 style="margin:0;">Answer Format Rules</h2><button data-action="formatRules">View rules</button></div>';
-  html += '<p class="subtle" style="margin:8px 0 0;">Scoring is binary: full credit only when your answer matches the exact canonical form. <strong>Read these rules before taking a test.</strong></p>';
+  html += '<div class="row between"><h2 style="margin:0;">Answer Format Tips</h2><button data-action="formatRules">View tips</button></div>';
+  html += '<p class="subtle" style="margin:8px 0 0;">Any reasonable answer that&rsquo;s mathematically right gets full credit. The tips show the form the real placement test prefers &mdash; worth picking up the habit, but you won&rsquo;t lose points here for using an equivalent form.</p>';
   html += '</section>';
   html += '<section class="card">';
   html += '<h2>Tests</h2>';
@@ -2703,10 +2699,12 @@ function finalizeTest() {
     status = getAnswerStatus(draft.answers[i], test.questions[i]);
     if (status === "correct") {
       score += 1;
+    } else if (status === "format-only") {
+      score += 1;
+      formatOnly.push(i);
     } else {
+      mathWrong.push(i);
       missed.push(i);
-      if (status === "format-only") formatOnly.push(i);
-      else mathWrong.push(i);
     }
   }
   state.results[test.id] = {
@@ -2730,54 +2728,65 @@ function renderMissedReview() {
   var result = test ? state.results[test.id] : null;
   var missed;
   var formatOnly;
-  var mathWrong;
-  var formatSet;
   var html = '';
   var i;
   var idx;
   var question;
   var userAnswer;
-  var isFormatOnly;
-  var statusLabel;
-  var statusClass;
+  var perfect;
   if (!test || !result) return renderHome();
-  missed = result.missedIndexes || [];
+  missed = result.mathWrongIndexes || result.missedIndexes || [];
   formatOnly = result.formatOnlyIndexes || [];
-  mathWrong = result.mathWrongIndexes || [];
-  formatSet = {};
-  for (i = 0; i < formatOnly.length; i += 1) formatSet[formatOnly[i]] = true;
+  perfect = missed.length === 0 && formatOnly.length === 0;
+
   html += '<section class="card">';
-  html += '<div class="row between"><div><h2>' + escapeHtml(test.title) + '</h2><p class="subtle">Score: ' + result.score + '/' + result.total + '</p></div><button class="secondary" data-action="home">Tests</button></div>';
-  if (missed.length === 0) {
-    html += '<div class="notice">Perfect score. No missed problems.</div>';
+  html += '<div class="row between"><div><h2 style="margin:0;">' + escapeHtml(test.title) + '</h2><p class="subtle" style="margin:4px 0 0;">Score: <strong>' + result.score + ' / ' + result.total + '</strong></p></div><button class="secondary" data-action="home">Tests</button></div>';
+
+  if (perfect) {
+    html += '<div class="notice" style="border-color:#9bc9a4;background:#e8f6ee;color:#0f6b3a;"><strong>Perfect score, perfect format.</strong> Every answer was right and written in the preferred form.</div>';
+  } else if (missed.length === 0) {
+    html += '<div class="notice" style="border-color:#9bc9a4;background:#e8f6ee;color:#0f6b3a;"><strong>Perfect score!</strong> Every problem got full credit. ' + (formatOnly.length === 1 ? 'One answer was written in an alternate form &mdash; the preferred form is shown below as a tip for next time.' : 'A few answers were written in an alternate form &mdash; the preferred forms are shown below as tips for next time.') + '</div>';
   } else {
-    html += '<div class="notice">';
-    html += '<p style="margin-top:0"><strong>Scoring is binary:</strong> the placement test gives full credit only for the exact canonical form. Equivalent values in a wrong format (improper fraction instead of mixed number, missing units, etc.) score zero on the real test, so they score zero here too.</p>';
-    html += '<p style="margin-bottom:0">Missed problems below are tagged either <strong>Math error</strong> (wrong value) or <strong>Format error</strong> (right value, wrong form). Format errors are the most important to fix &mdash; the math is right, the habit isn\'t.</p>';
-    html += '</div>';
-    html += '<p class="small"><strong>Summary:</strong> ' + mathWrong.length + ' math error' + (mathWrong.length === 1 ? '' : 's') + ', ' + formatOnly.length + ' format error' + (formatOnly.length === 1 ? '' : 's') + '.';
-    html += ' <button class="secondary" data-action="formatRules" style="margin-left:8px;">See answer format rules</button></p>';
+    html += '<div class="notice"><strong>Nice work.</strong> Below ' + (missed.length === 1 ? 'is the 1 problem' : 'are the ' + missed.length + ' problems') + ' to look at again' + (formatOnly.length > 0 ? ', then ' + (formatOnly.length === 1 ? 'a format tip' : formatOnly.length + ' format tips') + ' for next time' : '') + '.</div>';
+  }
+
+  // ---- Missed problems (math errors only) ----
+  if (missed.length > 0) {
+    html += '<h3 style="margin-top:18px;">Missed problems (' + missed.length + ')</h3>';
     for (i = 0; i < missed.length; i += 1) {
       idx = missed[i];
       question = test.questions[idx];
       userAnswer = result.answers && typeof result.answers[idx] !== "undefined" ? result.answers[idx] : '';
-      isFormatOnly = !!formatSet[idx];
-      statusLabel = isFormatOnly ? 'Format error' : 'Math error';
-      statusClass = isFormatOnly ? 'warn' : '';
       html += '<div class="card">';
-      html += '<div class="row between"><h3 style="margin:0;">Problem ' + (idx + 1) + '</h3><span class="status-pill ' + statusClass + '">' + statusLabel + '</span></div>';
+      html += '<h3 style="margin:0 0 6px;">Problem ' + (idx + 1) + '</h3>';
       html += '<div class="question-text">' + escapeHtml(question.prompt) + '</div>';
       html += renderVisual(question.visual);
       html += '<p><strong>Your answer:</strong> <span class="incorrect">' + escapeHtml(userAnswer === '' ? '(blank)' : userAnswer) + '</span></p>';
       html += '<p><strong>Correct answer:</strong> <span class="correct">' + escapeHtml(question.preferredAnswer) + '</span></p>';
-      if (isFormatOnly) {
-        html += '<p class="small subtle"><em>The math is right but the form doesn\'t match what the placement test will accept. Practice writing the exact form shown above.</em></p>';
-      }
       if (question.topic) html += '<p class="small subtle"><strong>Topic:</strong> ' + escapeHtml(question.topic) + '</p>';
       html += '</div>';
     }
   }
-  html += '<div class="row"><button class="secondary" data-action="home">Back to tests</button><button class="secondary" data-action="retake" data-test-id="' + escapeHtml(test.id) + '">Retake this test</button></div>';
+
+  // ---- Format tips (got credit, but different form than preferred) ----
+  if (formatOnly.length > 0) {
+    html += '<h3 style="margin-top:18px;">Format tips (' + formatOnly.length + ')</h3>';
+    html += '<p class="small subtle">' + (formatOnly.length === 1 ? 'This got credit' : 'These all got credit') + '. The math was right. Here ' + (formatOnly.length === 1 ? 'is' : 'are') + ' the form' + (formatOnly.length === 1 ? '' : 's') + ' the placement test expects, so it becomes a habit.</p>';
+    for (i = 0; i < formatOnly.length; i += 1) {
+      idx = formatOnly[i];
+      question = test.questions[idx];
+      userAnswer = result.answers && typeof result.answers[idx] !== "undefined" ? result.answers[idx] : '';
+      html += '<div class="card" style="border-color:#e0d49a;background:#fffdf3;">';
+      html += '<div class="row between"><h3 style="margin:0;">Problem ' + (idx + 1) + '</h3><span class="status-pill warn">Format tip</span></div>';
+      html += '<div class="question-text">' + escapeHtml(question.prompt) + '</div>';
+      html += '<p><strong>You wrote:</strong> ' + escapeHtml(userAnswer === '' ? '(blank)' : userAnswer) + ' &nbsp;<span class="small subtle">(counted as correct)</span></p>';
+      html += '<p><strong>Preferred form:</strong> <span class="correct">' + escapeHtml(question.preferredAnswer) + '</span></p>';
+      html += '</div>';
+    }
+    html += '<p class="small subtle" style="margin-top:8px;"><button class="secondary" data-action="formatRules">See the full format guide</button></p>';
+  }
+
+  html += '<div class="row" style="margin-top:16px;"><button class="secondary" data-action="home">Back to tests</button><button class="secondary" data-action="retake" data-test-id="' + escapeHtml(test.id) + '">Retake this test</button></div>';
   html += '</section>';
   getAppEl().innerHTML = html;
 }
